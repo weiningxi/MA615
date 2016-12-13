@@ -1,0 +1,389 @@
+---
+title: "Twitter Searchstream Analysis: Cats V.S Dogs"
+author: "Ningxi Wei"
+date: "December 11, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#install.packages("streamR")
+library(streamR)
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("grid")
+library(grid)
+#install.packages("tm")
+library(tm)
+#install.packages("wordcloud")
+library(wordcloud)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+#install.packages("png")
+library(png)
+#install.packages("snowballC")
+library(SnowballC)
+#install.packages("stringr")
+library(stringr)
+#install.packages("wordcloud2")
+library(wordcloud2)
+#install.packages("ggvis")
+library(ggvis)
+```
+  **Introduction**  
+  <br>
+  Social networks like facebook, instagram and twitter have provided platforms for people to share ideas, discuss popular events and connect with others without the limitation of locations. Despite new events going on everyday, what would people post about their pets on the social networks as a daily life topic? Among the home pets, cats and dogs are always the main two categories to perform interesting comparisons. My final project for this course is to study tweet contents people post about cats and dogs within certain time duration and aim to achieve the following objectives:  
+    1. Within the United States, find out locations where people like to post tweets about cats/dogs.  
+    <br>
+    2. Generate histograms to see how the tweets get distributed among the states within the United States.  
+    <br>
+    3. Within the United States and based on number of 'likes', find out locations where popular tweets about cats/dogs get posted.  
+    <br>
+    4. Make word clouds to analyze what would people say about cats/dogs.  
+    <br>
+    5. In terms of the tweet contents, describe the relationship between the number of 'favorite count' and the number of 'follower count'.  
+    <br>
+    6. Obtain the probability density functions of 'friends count' based on the tweets data.  
+    <br>
+    **Collecting Data**   
+    <br>
+  To gather tweet contents related to cats or dogs, I use the following code:  
+  
+```{r searchStream}
+###roauth.R
+#library(ROAuth)
+#requestURL <- "https://api.twitter.com/oauth/request_token"
+#accessURL <- "https://api.twitter.com/oauth/access_token"
+#authURL <- "https://api.twitter.com/oauth/authorize"
+#consumerKey <- "IhG0wwuml3YdYu2LrTUwboMQt"
+#consumerSecret <- "EdAheiWkpSr53dYTBxcWSILxiafUOMi3y23UmfHI12ayFXaUCy"
+#my_oauth <- OAuthFactory$new(consumerKey = consumerKey, consumerSecret = consumerSecret, 
+                             #requestURL = requestURL, accessURL = accessURL, authURL = authURL)
+#my_oauth$handshake(cainfo = system.file("CurlSSL", "cacert.pem", package = "RCurl"))
+#save(my_oauth, file = "my_oauth.Rdata")
+
+#################
+
+
+#load("my_oauth.Rdata")
+
+#First search: within 10000s, search tweets related to cats
+#filterStream("tweetsCat.json", 
+             #track=c("cat","kitten"), 
+             #timeout=10000, oauth=my_oauth)
+#tweetsC.df <- parseTweets("tweetsCat.json", simplify=FALSE)
+
+#Second search: within 10000s, search tweets related to dogs
+#filterStream("tweetsDog.json", 
+             #track=c("dog","puppy"), 
+             #timeout=10000, oauth=my_oauth)
+#tweetsD.df <- parseTweets("tweetsDog.json", simplify=FALSE)
+
+#reduce the data location within US, number of tweets related to dogs is
+#significantly bigger than the number of tweets related to cats
+#tweetsC.df <- subset(tweetsC.df,tweetsC.df$country=="United States")
+#tweetsD.df <- subset(tweetsD.df,tweetsD.df$country=="United States")
+```
+ 
+ I run two search streams that one has the search word "cat" and another has "dog" and store the information into two data frames. The search time duration is 10000 seconds (roughly 2.78 hours). After the search I have obtained two large data sets and the number of tweets about dogs is significantly bigger than the number of tweets about cats. However there is an obvious decreasing in the number of valid tweets in both data sets when I required the tweets to have geo locations and are posted in the United States. I have saved the data I collected by the day I run the search stream for future convenience. To gain the lasted data, please uncomment the code above to reproduce the information. All the statistical analysis and the results are based on the data I ran the search stream on December 6, 2016.  
+<br> 
+ **Map Plotting**  
+<br>
+ To find out the locations where people post tweets about cats/dogs, I use the geo locations in the data to make pins and apply them on the map layer provided by Professor Haviland.
+ 
+```{r map}
+#load .csv file for analysis
+tweetsC<-read.csv("TweetsCats.csv")
+#Extra data cleaning
+tweetsC<-subset(tweetsC,tweetsC$place_lon > -125)
+tweetsC<-subset(tweetsC,tweetsC$place_lon < -66)
+tweetsC<-subset(tweetsC,tweetsC$place_lat > 25)
+tweetsC<-subset(tweetsC,tweetsC$place_lat < 50)###plot for cats on the map
+#add cute background (just for fun)
+ima <- readPNG("background.png")
+g <- rasterGrob(ima, interpolate=TRUE)
+map.data <- map_data("state")
+points <- data.frame(x=as.numeric(tweetsC$place_lon),
+                     y=as.numeric(tweetsC$place_lat),f=tweetsC$full_name)
+points <- points[points$y>25,]
+p1<-ggplot(map.data)+
+  annotation_custom(rasterGrob(ima, width=unit(1,"npc"), height=unit(1,"npc")), 
+                    -Inf, Inf, -Inf, Inf)+
+  scale_x_continuous(expand=c(0,0)) +
+  scale_y_continuous(expand=c(0,0)) +
+  geom_map(aes(map_id=region),
+           map=map.data,
+           fill="white",
+           color="grey20",size=0.3)+
+  expand_limits(x=map.data$long,y=map.data$lat)+ 
+  theme(axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(), 
+        axis.title=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(), 
+        panel.grid.major=element_blank(),
+        plot.background=element_blank(),
+        plot.margin=unit(0*c(-1.5,-1.5,-1.5,-1.5),"lines"))+
+  geom_point(data=points,
+             aes(points$x,points$y,colour=factor(points$f)),size=2.5,
+             alpha=1/5,color="red",)+ggtitle("Tweets related to cats within 10000s search stream")+theme(plot.title = element_text(lineheight=2.5, face="bold"))
+p1
+###plot for dogs on the map
+tweetsD<-read.csv("TweetsDogs.csv")
+#Extra data cleaning
+tweetsD<-subset(tweetsD,tweetsD$place_lon > -125)
+tweetsD<-subset(tweetsD,tweetsD$place_lon < -66)
+tweetsD<-subset(tweetsD,tweetsD$place_lat > 25)
+tweetsD<-subset(tweetsD,tweetsD$place_lat < 50)
+imaD <- readPNG("background1.png")
+gD <- rasterGrob(imaD, interpolate=TRUE)
+map.data <- map_data("state")
+points <- data.frame(x=as.numeric(tweetsD$place_lon),
+                     y=as.numeric(tweetsD$place_lat))
+points <- points[points$y>25,]
+p2<-ggplot(map.data)+
+  annotation_custom(rasterGrob(imaD, width=unit(1,"npc"), height=unit(1,"npc")), 
+                    -Inf, Inf, -Inf, Inf)+
+  scale_x_continuous(expand=c(0,0)) +
+  scale_y_continuous(expand=c(0,0)) +
+  geom_map(aes(map_id=region),
+           map=map.data,
+           fill="red",
+           color="grey20",size=0.3)+
+  expand_limits(x=map.data$long,y=map.data$lat)+ 
+  theme(axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(), 
+        axis.title=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(), 
+        panel.grid.major=element_blank(),
+        plot.background=element_blank(),
+        plot.margin=unit(0*c(-1.5,-1.5,-1.5,-1.5),"lines"))+
+  geom_point(data=points,
+             aes(x=x,y=y),size=2.5,
+             alpha=1/5,color="black")+ggtitle("Tweets related to dogs within 10000s search stream")+theme(plot.title = element_text(lineheight=2.5, face="bold"))
+p2
+```
+<br><br>
+As we look at two map plots, there are more pins showed on the plot for dogs since there are more tweets related to dogs. Los Angeles, San Diego, San Francisco, Phoenix and Texas are the locations where people like to tweet about cats and dogs. In Denver and South Dakota, more people tweet about dogs than cats. As in Wyoming, although the number of original data about cats is smaller than that of dogs, more pins of cats are displayed within Wyoming. After the visualization report, I would like to see more detailed information using histograms.  
+<br>
+**Histograms**  
+<br>
+```{r hist}
+###Try some histogram plots
+histC <- tweetsC
+#filter by state
+histC$full_name<-sub(".*\\, ","",histC$full_name)
+histC$full_name<-gsub("United States","USA",histC$full_name)
+histC$full_name<-gsub("Warwick New York Hotel","NY",histC$full_name)
+histC$full_name<-gsub("San Francisco","CA",histC$full_name)
+
+hC <- ggplot(histC, aes(histC$full_name))
+hC+geom_bar(aes(fill = ..count..),width=1.0)+xlab("States")+ylab("Counts of tweets related to cats")+ggtitle("Number of tweets distributed among states within 10000s search stream")
+
+#histrogram for tweets related to dogs
+#histrogram for tweets related to dogs
+histD <- tweetsD
+#filter by state, start with some data cleaning
+histD$full_name<-sub(".*\\, ","",histD$full_name)
+histD$full_name<-gsub("United States","USA",histD$full_name)
+histD$full_name<-gsub("Friendship Hospital For Animals","USA",histD$full_name)
+histD$full_name<-gsub("Aveda Experience Center","USA",histD$full_name)
+histD$full_name<-gsub("Metro Orange Line - Woodman","CA",histD$full_name)
+histD$full_name<-gsub("San Diego State University (SDSU)","CA",histD$full_name)
+histD$full_name<-gsub("Costco Wholesale","USA",histD$full_name)
+
+hD <- ggplot(histD, aes(factor(histD$full_name)))
+hD+geom_bar(aes(fill = ..count..),width=1.0)+xlab("States")+ylab("Counts of tweets related to dogs")+ggtitle("Number of tweets distributed among states within 10000s search stream")
+
+```
+<br><br>
+For the cat data, states California, Florida, New York, and Texas have over 60 related tweets posted which account for more than 20% of the total cat data. For the dog data, same states have contributed over 200 related tweets which account for more than 18% of the total dog data.  
+<br>
+**Popular Tweets**  
+<br>
+  My next task is to find out the locations within the United States where popular tweets get posted. The grading criteria for 'popular tweets' is the top 100 tweets ranked by the number of favorite counts of both data sets.  
+
+```{r fav}
+###rank based on favorite tweet count and select top 100 favorite tweets related to cats/dogs
+catFavTweet <- tweetsC[order(tweetsC$`favourites_count`,decreasing = TRUE),]
+catFavTweet <- subset(catFavTweet[1:100,])
+
+dogFavTweet <- tweetsD[order(tweetsD$`favourites_count`,decreasing = TRUE),]
+dogFavTweet <- subset(dogFavTweet[1:100,])
+
+### plot top 100 favorite tweets about cats and dogs on the map
+map.data <- map_data("state")
+#please change the directory based on current system
+imaCD <- readPNG("cd.png")
+gCD <- rasterGrob(imaCD, interpolate=TRUE)
+pointsC <- data.frame(x=as.numeric(catFavTweet$place_lon),
+                      y=as.numeric(catFavTweet$place_lat))
+pointsD <- data.frame(x=as.numeric(dogFavTweet$place_lon),
+                      y=as.numeric(dogFavTweet$place_lat))
+
+pointsC <- pointsC[pointsC$y>25,]
+pointsD <- pointsD[pointsD$y>25,]
+
+p3<-ggplot(map.data)+
+  annotation_custom(rasterGrob(imaCD, width=unit(1,"npc"), height=unit(1,"npc")), 
+                    -Inf, Inf, -Inf, Inf)+
+  scale_x_continuous(expand=c(0,0)) +
+  scale_y_continuous(expand=c(0,0)) +
+  geom_map(aes(map_id=region),
+           map=map.data,
+           fill="white",
+           color="grey20",size=0.3)+
+  expand_limits(x=map.data$long,y=map.data$lat)+ 
+  theme(axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(), 
+        axis.title=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(), 
+        panel.grid.major=element_blank(),
+        plot.background=element_blank(),
+        plot.margin=unit(0*c(-1.5,-1.5,-1.5,-1.5),"lines"))+
+  geom_point(data=pointsC,
+             aes(x=x,y=y),size=2.5,
+             alpha=1/5,color="Red")+
+  geom_point(data=pointsD,
+             aes(x=x,y=y),size=2.5,
+             alpha=1/5,color="Blue")+
+  ggtitle("Top 100 Favorite Tweets about Cats (Red)/Dogs (Blue)")+theme(plot.title = element_text(lineheight=2.5, face="bold"))
+p3
+```
+<br><br>
+I have plotted the popular tweets about both cats and dogs on the same map and used different colors to distinguish. One interesting fact I discover is that although there are more tweets about dogs, many of them have low favorite counts. For example in states New Mexico, Mississippi, Alabama and South Dakota, more tweets about dogs get posted, but only a few of them are popular.  
+<br>
+**Word Clouds**  
+<br>
+Now I would like to segue to the next topic: generating word clouds. After gathering tweets, a further analysis is to search the texts and summarize words of high occurrences. For the data sets relate to cats and dogs, I am curious to see what people would say about them and want to obtain a list of descriptive words that have high occurrences. I choose to use package wordcloud2 to generate word clouds which have a better visualization of the results. Before the final step, I clean the text by removing hashtags, references, and unnecessary URLs to make sure there will not be useless outcomes in the word clouds.
+
+```{r wordcloud}
+#text cleaning
+tweetsCats<-read.csv("TweetsCats.csv",stringsAsFactors = FALSE)
+tweetsCats$text<-gsub("&amp","",tweetsCats$text)
+tweetsCats$text<-gsub("(RT|via)((?:\\b\\W*@\\w+)+)","",tweetsCats$text)
+tweetsCats$text<-gsub("@\\w+","",tweetsCats$text)
+tweetsCats$text<-gsub("[[:punct:]]","",tweetsCats$text)
+tweetsCats$text<-gsub("http\\w+","",tweetsCats$text)
+tweetsCats$text<-gsub("[\t]{2,}","",tweetsCats$text)
+#tweetsCats$text<-str_replace_all(tweetsCats$text," "," ")
+tweetsCats$text<-str_replace_all(tweetsCats$text,"RT @[a-z,A-Z]*: ","")
+tweetsCats$text<-str_replace_all(tweetsCats$text,"@[a-z,A-Z]*: ","")
+tweetsCats$text<-str_replace_all(tweetsCats$text,"#[a-z,A-Z]*: ","")
+cCorpus <- Corpus(VectorSource(tweetsCats$text))
+cCorpus <- tm_map(cCorpus, content_transformer(tolower))
+cCorpus <- tm_map(cCorpus, removePunctuation)
+cCorpus <- tm_map(cCorpus, PlainTextDocument)
+cCorpus <- tm_map(cCorpus, removeWords, stopwords('english'))
+cCorpus <- tm_map(cCorpus, stemDocument)
+dmC <- TermDocumentMatrix(cCorpus)
+mC <- as.matrix(dmC)
+vC <- sort(rowSums(mC),decreasing=TRUE)
+dC <- data.frame(word = names(vC),freq=vC)
+#A couple of wordclouds choices:
+#wordcloud2(d,color = "random-light", backgroundColor = "grey")
+catCloud<-letterCloud(dC,word="CAT", color="random-light",size=5)
+catCloud
+
+###Make Word Clouds for dogs
+tweetsDogs<-read.csv("tweetsDogs.csv",stringsAsFactors = FALSE)
+tweetsDogs$text<-gsub("&amp","",tweetsDogs$text)
+tweetsDogs$text<-gsub("(RT|via)((?:\\b\\W*@\\w+)+)","",tweetsDogs$text)
+tweetsDogs$text<-gsub("@\\w+","",tweetsDogs$text)
+tweetsDogs$text<-gsub("[[:punct:]]","",tweetsDogs$text)
+tweetsDogs$text<-gsub("http\\w+","",tweetsDogs$text)
+tweetsDogs$text<-gsub("[\t]{2,}","",tweetsDogs$text)
+#tweetsDogs$text<-str_replace_all(tweetsDogs$text," "," ")
+tweetsDogs$text<-str_replace_all(tweetsDogs$text,"RT @[a-z,A-Z]*: ","")
+tweetsDogs$text<-str_replace_all(tweetsDogs$text,"@[a-z,A-Z]*: ","")
+tweetsDogs$text<-str_replace_all(tweetsDogs$text,"#[a-z,A-Z]*: ","")
+cCorpus <- Corpus(VectorSource(tweetsDogs$text))
+cCorpus <- tm_map(cCorpus, content_transformer(tolower))
+cCorpus <- tm_map(cCorpus, removePunctuation)
+cCorpus <- tm_map(cCorpus, PlainTextDocument)
+cCorpus <- tm_map(cCorpus, removeWords, stopwords('english'))
+cCorpus <- tm_map(cCorpus, stemDocument)
+dmD <- TermDocumentMatrix(cCorpus)
+mD <- as.matrix(dmD)
+vD <- sort(rowSums(mD),decreasing=TRUE)
+dD <- data.frame(word = names(vD),freq=vD)
+#A couple of wordclouds choices:
+dogC<- wordcloud2(dD,color = "random-light", backgroundColor = "grey",shape = 'star',size=5)
+dogC
+#dogCloud<-letterCloud(dD,word="DOG", color="random-light",size=5)
+#dogCloud
+```
+<br><br>
+  One of the amazing features of wordcloud2 is that the result has the word frequency of each output. I use the command 'lettercloud' to generate the word cloud for the cat data. In the result, "cute", "love", "want", "lady", "baby" are the words in the tweet that have high occurrences to describe cats. For the dog data I use the shape parameter to get a different style. The high-frequency descriptive words in the tweets related to dogs are "like", "good", "friend", "happy" and "great". In terms of sentiment analysis, both word clouds reflect people's positive attitude toward cats and dogs.   
+<br>
+**Modeling Fitting**  
+<br>
+  Besides plotting and generalizing visual outcomes, I am also interested in the relationship between the number of 'favorite count' and the number of 'follower count'. Furthermore, if a tweet has a high 'favorite count', does it imply that the user who posts it has a high 'follower count'? To test my hypothesis, I start with plotting the scatter plots for two data sets and then try the linear model fitting to see if there exists a linear relationship between the two variables.  
+  
+```{r lm}
+###Analyze the relationship between favourite_count and followers_count
+l1<-lm(tweetsC$followers_count~tweetsC$favourites_count)
+g4<-ggplot(tweetsC,aes(tweetsC$favourites_count,tweetsC$followers_count))
+g4+geom_point(color="darkblue")+labs(title = "Tweets about cats: followers_count V.S favourites_count",x="favourites_count",y="followers_count")
+summary(l1)
+#Comments:
+#From the plot we can observe a strong linear positive relatioship between followers_count and favourites_count
+
+#dogs follower_count V.S favourites_count
+l2<-lm(tweetsD$followers_count~tweetsD$favourites_count)
+g5<-ggplot(tweetsD,aes(tweetsD$favourites_count,tweetsD$followers_count,))
+g5+geom_point(color="red")+labs(title = "Tweets about dogs: followers_count V.S favourites_count",x="favourites_count",y="followers_count")
+summary(l2)
+#Comments:
+#From the plot we can observe a positive relationship between followers_count and favourites_count but it is nonlinear
+```
+<br><br>
+From both scatter lots, we could observe a positive relationship between 'favorite count' and 'follower count'. For the cat data it seemed to have a more linear relationship than the dog data. However when I try the linear model fitting, the dog data actually has a better linear model fitting trend, convinced by the R-squared and the Residual Standard Error statistics. Here linear model is not a good choice to fit my data sets, but one possible improvement is to try the quadratic model fitting.  
+<br>
+**Probability Density Plots**  
+<br>
+  My last research interest is to examine the 'friends count' each tweeter user has. When people tweet about cats or dogs, how will their friends react in terms of 'friends count'? Moreover, what is the probability density function of 'friends count' for the cat/dog data set? I use ggvis to generate the probability density functions for two data sets. Originally I have added interactive bars to change the distribution types, but the html can only show the default Gaussian distribution with bandwidth 1.  
+```{r ggvis}
+#ggvis plot 
+#friends_count Cats
+tweetsC %>% 
+  ggvis(x = ~tweetsC$friends_count) %>%
+  layer_densities(
+    adjust = input_slider(.1, 2, value = 1, step = .1, label = "Bandwidth adjustment"),
+    kernel = input_select(
+      c("Gaussian" = "gaussian",
+        "Epanechnikov" = "epanechnikov",
+        "Rectangular" = "rectangular",
+        "Triangular" = "triangular",
+        "Biweight" = "biweight",
+        "Cosine" = "cosine",
+        "Optcosine" = "optcosine"),
+      label = "Kernel"),fill := "red"
+  ) %>%
+  add_axis("x", title = "Friends Count(Cats)")
+#Friends_count Dogs
+tweetsD %>% 
+  ggvis(x = ~tweetsD$friends_count) %>%
+  layer_densities(
+    adjust = input_slider(.1, 2, value = 1, step = .1, label = "Bandwidth adjustment"),
+    kernel = input_select(
+      c("Gaussian" = "gaussian",
+        "Epanechnikov" = "epanechnikov",
+        "Rectangular" = "rectangular",
+        "Triangular" = "triangular",
+        "Biweight" = "biweight",
+        "Cosine" = "cosine",
+        "Optcosine" = "optcosine"),
+      label = "Kernel"),fill := "darkblue"
+  ) %>%
+  add_axis("x", title = "Friends Count(Dogs)")
+#html can't display the interaction bar, to reproduce more features, please run the code in R.
+```
+<br><br>
+Two probability density functions have similar shapes that are positive skewed. For the cat data, most users have less than 5,000 friends count and only a few have more than 5,000 friends count but all less than 10000. For the dog data, most users have less than 10000 friends count but there are few who have friends count over 10,000 but no more than 15,000. It seems that people who tweet about dogs tend to have more connections with friends and maybe more willing to interact with friends than people who tweet about cats.  
+
+
